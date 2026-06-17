@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"ivr_ataljanseva/asterisk"
 	"ivr_ataljanseva/db/repository"
 	"ivr_ataljanseva/models"
 )
@@ -46,8 +47,12 @@ func (h *NagarsevakHandler) FindNagarsevak(c *gin.Context) {
 
 	switch {
 	case count == 0:
-		c.JSON(http.StatusOK, models.NagarsevakResponse{
-			Status: "not_found",
+		c.JSON(http.StatusOK, gin.H{
+			"status": "not_found",
+			"_channel_vars": asterisk.FromNagarsevak(
+				"not_found", req.PhoneNumber, req.Language,
+				req.Pincode, req.Ward, "", "",
+			),
 		})
 
 	case count == 1:
@@ -66,13 +71,17 @@ func (h *NagarsevakHandler) FindNagarsevak(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, models.NagarsevakResponse{
-			Status:    "single",
-			AutoSaved: true,
-			Nagarsevak: &models.NagarsevakItem{
-				ID:   ns.ID.String(),
-				Name: ns.Name,
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "single",
+			"auto_saved": true,
+			"nagarsevak": map[string]string{
+				"id":   ns.ID.String(),
+				"name": ns.Name,
 			},
+			"_channel_vars": asterisk.FromNagarsevak(
+				"single", req.PhoneNumber, req.Language,
+				req.Pincode, req.Ward, ns.ID.String(), ns.Name,
+			),
 		})
 
 	case count >= 2 && count <= 5:
@@ -85,14 +94,22 @@ func (h *NagarsevakHandler) FindNagarsevak(c *gin.Context) {
 			})
 		}
 
-		c.JSON(http.StatusOK, models.NagarsevakResponse{
-			Status: "choose",
-			List:   list,
+		c.JSON(http.StatusOK, gin.H{
+			"status": "choose",
+			"list":   list,
+			"_channel_vars": asterisk.FromNagarsevak(
+				"choose", req.PhoneNumber, req.Language,
+				req.Pincode, req.Ward, "", "",
+			),
 		})
 
 	default:
-		c.JSON(http.StatusOK, models.NagarsevakResponse{
-			Status: "too_many",
+		c.JSON(http.StatusOK, gin.H{
+			"status": "too_many",
+			"_channel_vars": asterisk.FromNagarsevak(
+				"too_many", req.PhoneNumber, req.Language,
+				req.Pincode, req.Ward, "", "",
+			),
 		})
 	}
 }
@@ -132,8 +149,11 @@ func (h *NagarsevakHandler) CompleteCitizen(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":        true,
-		"saved":          true,
+		"success":         true,
+		"saved":           true,
 		"nagarsevak_name": ns.Name,
+		"_channel_vars": asterisk.FromComplete(
+			req.PhoneNumber, req.Language, req.Pincode, req.Ward, ns.Name,
+		),
 	})
 }

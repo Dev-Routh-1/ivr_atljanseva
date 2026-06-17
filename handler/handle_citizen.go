@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"ivr_ataljanseva/asterisk"
 	"ivr_ataljanseva/db/repository"
 	"ivr_ataljanseva/models"
 )
@@ -41,12 +42,16 @@ func (h *CitizenHandler) GetCitizen(c *gin.Context) {
 	}
 
 	if citizen == nil {
-		c.JSON(http.StatusOK, models.CitizenLookupResponse{
-			Found: false,
+		c.JSON(http.StatusOK, gin.H{
+			"found": false,
+			"_channel_vars": asterisk.FromCitizenLookup(
+				false, "", "", "", "", "",
+			),
 		})
 		return
 	}
 
+	nagarsevakID := citizen.NagarsevakID.String()
 	nagarsevakName := ""
 
 	if citizen.NagarsevakID != uuid.Nil {
@@ -64,8 +69,12 @@ func (h *CitizenHandler) GetCitizen(c *gin.Context) {
 		"language":        citizen.Language,
 		"pincode":         citizen.Pincode,
 		"ward":            citizen.Ward,
-		"nagarsevak_id":   citizen.NagarsevakID.String(),
+		"nagarsevak_id":   nagarsevakID,
 		"nagarsevak_name": nagarsevakName,
+		"_channel_vars": asterisk.FromCitizenLookup(
+			true, citizen.Language, citizen.Pincode,
+			citizen.Ward, nagarsevakID, nagarsevakName,
+		),
 	})
 }
 

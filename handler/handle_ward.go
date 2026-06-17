@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"ivr_ataljanseva/asterisk"
 	"ivr_ataljanseva/db/repository"
 	"ivr_ataljanseva/models"
 )
@@ -50,8 +52,12 @@ func (h *WardHandler) ResolveWard(c *gin.Context) {
 
 		case len(matches) == 0:
 
-			c.JSON(http.StatusOK, models.ResolveWardResponse{
-				Status: "not_found",
+			c.JSON(http.StatusOK, gin.H{
+				"status": "not_found",
+				"_channel_vars": asterisk.FromResolveWard(
+					"not_found", req.Phone, req.Language, req.Pincode,
+					"", "", "",
+				),
 			})
 
 		case len(matches) == 1:
@@ -74,11 +80,15 @@ func (h *WardHandler) ResolveWard(c *gin.Context) {
 				return
 			}
 
-			c.JSON(http.StatusOK, models.ResolveWardResponse{
-				Status:         "single_ward",
-				Ward:           match.Ward,
-				NagarsevakID:   match.NagarsevakID,
-				NagarsevakName: match.NagarsevakName,
+			c.JSON(http.StatusOK, gin.H{
+				"status":          "single_ward",
+				"ward":            match.Ward,
+				"nagarsevak_id":   match.NagarsevakID.String(),
+				"nagarsevak_name": match.NagarsevakName,
+				"_channel_vars": asterisk.FromResolveWard(
+					"single_ward", req.Phone, req.Language, req.Pincode,
+					match.Ward, match.NagarsevakID.String(), match.NagarsevakName,
+				),
 			})
 
 		case len(matches) <= 4:
@@ -89,15 +99,23 @@ func (h *WardHandler) ResolveWard(c *gin.Context) {
 				wards = append(wards, m.Ward)
 			}
 
-			c.JSON(http.StatusOK, models.ResolveWardResponse{
-				Status: "choose_ward",
-				Wards:  wards,
+			c.JSON(http.StatusOK, gin.H{
+				"status": "choose_ward",
+				"wards":  wards,
+				"_channel_vars": asterisk.FromResolveWard(
+					"choose_ward", req.Phone, req.Language, req.Pincode,
+					"", "", "",
+				),
 			})
 
 		default:
 
-			c.JSON(http.StatusOK, models.ResolveWardResponse{
-				Status: "too_many_matches",
+			c.JSON(http.StatusOK, gin.H{
+				"status": "too_many_matches",
+				"_channel_vars": asterisk.FromResolveWard(
+					"too_many_matches", req.Phone, req.Language, req.Pincode,
+					"", "", "",
+				),
 			})
 
 	}
