@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 
@@ -19,6 +20,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	baseURL := os.Getenv("PLIVO_BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+
+	audioBaseURL := os.Getenv("AUDIO_BASE_URL")
+	if audioBaseURL == "" {
+		audioBaseURL = baseURL + "/audio"
+	}
+
 	router := gin.Default()
 
 	citizenRepo := repository.NewCitizenRepository(database)
@@ -27,12 +38,14 @@ func main() {
 	citizenHandler := handler.NewCitizenHandler(citizenRepo, politicalRepo)
 	wardHandler := handler.NewWardHandler(politicalRepo, citizenRepo)
 	nagarsevakHandler := handler.NewNagarsevakHandler(politicalRepo, citizenRepo)
+	plivoHandler := handler.NewPlivoHandler(citizenRepo, politicalRepo, baseURL, audioBaseURL)
 
 	routes.RegisterRoutes(
 		router,
 		citizenHandler,
 		wardHandler,
 		nagarsevakHandler,
+		plivoHandler,
 	)
 
 	log.Println("server running on :8080")

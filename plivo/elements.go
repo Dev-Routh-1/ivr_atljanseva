@@ -1,0 +1,85 @@
+package plivo
+
+import (
+	"fmt"
+	"html"
+	"strings"
+)
+
+func Response(children ...string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
+	b.WriteString("<Response>")
+	for _, c := range children {
+		b.WriteString(c)
+	}
+	b.WriteString("</Response>")
+	return b.String()
+}
+
+func Speak(text, lang string) string {
+	l := languageCode(lang)
+	return fmt.Sprintf(`<Speak language="%s">%s</Speak>`, l, escape(text))
+}
+
+func Play(url string) string {
+	return fmt.Sprintf(`<Play>%s</Play>`, escape(url))
+}
+
+func GetDigits(action string, numDigits, timeout int, children ...string) string {
+	inner := strings.Join(children, "")
+	return fmt.Sprintf(
+		`<GetDigits action="%s" method="POST" numDigits="%d" timeout="%d">%s</GetDigits>`,
+		escape(action), numDigits, timeout, inner,
+	)
+}
+
+func Hangup() string {
+	return `<Hangup/>`
+}
+
+func Redirect(url string) string {
+	return fmt.Sprintf(`<Redirect>%s</Redirect>`, escape(url))
+}
+
+func Dial(number string) string {
+	return fmt.Sprintf(`<Dial>%s</Dial>`, escape(number))
+}
+
+func Wait(seconds int) string {
+	return fmt.Sprintf(`<Wait length="%d"/>`, seconds)
+}
+
+func AudioURL(baseURL, lang, file string) string {
+	return baseURL + "/" + langCodeShort(lang) + "/" + file
+}
+
+func languageCode(lang string) string {
+	switch strings.ToLower(lang) {
+	case "english":
+		return "en-US"
+	case "hindi":
+		return "hi-IN"
+	case "marathi":
+		return "mr-IN"
+	default:
+		return "en-US"
+	}
+}
+
+func langCodeShort(lang string) string {
+	switch strings.ToLower(lang) {
+	case "english":
+		return "en"
+	case "hindi":
+		return "hi"
+	case "marathi":
+		return "mr"
+	default:
+		return "en"
+	}
+}
+
+func escape(s string) string {
+	return html.EscapeString(s)
+}
