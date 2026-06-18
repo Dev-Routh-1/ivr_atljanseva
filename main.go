@@ -32,6 +32,8 @@ func main() {
 
 	router := gin.Default()
 
+	router.Static("/audio", "./audio")
+
 	citizenRepo := repository.NewCitizenRepository(database)
 	politicalRepo := repository.NewPoliticalUserRepository(database)
 

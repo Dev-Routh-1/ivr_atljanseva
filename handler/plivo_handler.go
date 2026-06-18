@@ -70,9 +70,8 @@ func (h *PlivoHandler) Incoming(c *gin.Context) {
 		return
 	}
 
-	audio := plivo.AudioURL(h.audioBaseURL, "english", "welcome.mp3")
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
+		plivo.Speak("Welcome to Atl Janseva IVR. Press 1 for English, 2 for Hindi, 3 for Marathi.", "english"),
 		plivo.GetDigits(h.baseURL+"/ivr/plivo/language?phone="+phone, 1, 10),
 	))
 }
@@ -83,11 +82,10 @@ func (h *PlivoHandler) LanguageSelect(c *gin.Context) {
 	digits := c.PostForm("Digits")
 
 	lang := resolveLanguage(digits)
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "ward-input.mp3")
 	action := h.baseURL + "/ivr/plivo/ward-input?phone=" + phone + "&language=" + lang
 
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
+		plivo.Speak("Please enter your 6 digit pincode followed by hash and your ward name. For example, 4 0 1 1 0 7 hash 1 0 B.", lang),
 		plivo.GetDigits(action, 20, 15),
 	))
 }
@@ -127,12 +125,34 @@ func (h *PlivoHandler) WardInput(c *gin.Context) {
 		h.wardInputRetry(c, phone, lang, strconv.Itoa(retry+1))
 
 	case len(matches) == 1:
-		m := matches[0]
-		err := h.citizenRepo.UpsertCitizen(c.Request.Context(), phone, lang, pincode, m.Ward, m.NagarsevakID)
+		selectedWard := matches[0].Ward
+		nagarsevaks, err := h.politicalRepo.FindNagarsevaks(c.Request.Context(), pincode, selectedWard)
 		if err != nil {
-			log.Printf("auto-save error: %v", err)
+			log.Printf("nagarsevak lookup error: %v", err)
+			c.String(http.StatusOK, plivo.Response(
+				plivo.Speak("System error. Please try again later.", lang),
+				plivo.Hangup(),
+			))
+			return
 		}
-		h.returnNagarsevakSingle(c, phone, lang, pincode, m.Ward, m.NagarsevakID.String(), m.NagarsevakName)
+		switch {
+		case len(nagarsevaks) == 0:
+			h.returnWhatsAppPrompt(c, lang)
+
+		case len(nagarsevaks) == 1:
+			ns := nagarsevaks[0]
+			err := h.citizenRepo.UpsertCitizen(c.Request.Context(), phone, lang, pincode, selectedWard, ns.ID)
+			if err != nil {
+				log.Printf("auto-save error: %v", err)
+			}
+			h.returnNagarsevakSingle(c, phone, lang, pincode, selectedWard, ns.ID.String(), ns.Name)
+
+		case len(nagarsevaks) <= 5:
+			h.returnNagarsevakMenu(c, phone, lang, pincode, selectedWard, nagarsevaks)
+
+		default:
+			h.returnWhatsAppPrompt(c, lang)
+		}
 
 	case len(matches) <= 4:
 		h.returnWardMenu(c, phone, lang, pincode, matches)
@@ -277,28 +297,22 @@ func (h *PlivoHandler) returnMainMenu(c *gin.Context, phone, lang, pincode, ward
 		"&pincode=" + pincode + "&ward=" + ward +
 		"&nagarsevak_id=" + nsID + "&nagarsevak_name=" + nsName
 
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "main-menu.mp3")
-
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Speak("Welcome back! Your nagarsevak "+nsName+" is connected.", lang),
-		plivo.Wait(1),
-		plivo.Play(audio),
+		plivo.Speak("Welcome back! Your nagarsevak "+nsName+" is connected. Press 1 for SOS, Press 2 to file a complaint, Press 3 to connect to your corporator.", lang),
 		plivo.GetDigits(action, 1, 10),
 	))
 }
 
 func (h *PlivoHandler) returnSOS(c *gin.Context, lang string) {
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "sos.mp3")
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
+		plivo.Speak("Your SOS alert has been sent. Help is on the way.", lang),
 		plivo.Hangup(),
 	))
 }
 
 func (h *PlivoHandler) returnComplaint(c *gin.Context, lang string) {
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "complaint.mp3")
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
+		plivo.Speak("Your complaint has been registered. You will receive a response shortly.", lang),
 		plivo.Hangup(),
 	))
 }
@@ -308,12 +322,8 @@ func (h *PlivoHandler) corporatorConnect(c *gin.Context, phone, lang, pincode, w
 		nsName = "your nagarsevak"
 	}
 
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "corporator-connect.mp3")
-
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Speak("Connecting you to "+nsName+".", lang),
-		plivo.Wait(1),
-		plivo.Play(audio),
+		plivo.Speak("Connecting you to "+nsName+". Please hold.", lang),
 		plivo.Hangup(),
 	))
 }
@@ -325,11 +335,10 @@ func (h *PlivoHandler) wardInputRetry(c *gin.Context, phone, lang, retryStr stri
 		return
 	}
 
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "no-match.mp3")
 	action := h.baseURL + "/ivr/plivo/ward-input?phone=" + phone + "&language=" + lang + "&retry=" + strconv.Itoa(retry)
 
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
+		plivo.Speak("We could not find a matching ward. Please try again. Enter your 6 digit pincode followed by hash and your ward name.", lang),
 		plivo.GetDigits(action, 20, 15),
 	))
 }
@@ -342,13 +351,11 @@ func (h *PlivoHandler) returnWardMenu(c *gin.Context, phone, lang, pincode strin
 		ttsParts = append(ttsParts, "Press "+strconv.Itoa(i+1)+" for "+m.Ward)
 	}
 
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "ward-menu.mp3")
 	action := h.baseURL + "/ivr/plivo/ward-select?phone=" + phone + "&language=" + lang +
 		"&pincode=" + pincode + "&wards=" + strings.Join(wards, ",")
 
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
-		plivo.Speak(strings.Join(ttsParts, ". ")+".", lang),
+		plivo.Speak("Multiple wards found. "+strings.Join(ttsParts, ". ")+".", lang),
 		plivo.GetDigits(action, 1, 10),
 	))
 }
@@ -358,12 +365,8 @@ func (h *PlivoHandler) returnNagarsevakSingle(c *gin.Context, phone, lang, pinco
 		nsName = "your nagarsevak"
 	}
 
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "goodbye.mp3")
-
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Speak("Your ward is "+ward+". Your nagarsevak is "+nsName+".", lang),
-		plivo.Wait(1),
-		plivo.Play(audio),
+		plivo.Speak("Your ward is "+ward+". Your nagarsevak is "+nsName+". Thank you for registering.", lang),
 		plivo.Hangup(),
 	))
 }
@@ -376,13 +379,11 @@ func (h *PlivoHandler) returnNagarsevakMenu(c *gin.Context, phone, lang, pincode
 		ttsParts = append(ttsParts, "Press "+strconv.Itoa(i+1)+" for "+ns.Name)
 	}
 
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "nagarsevak-menu.mp3")
 	action := h.baseURL + "/ivr/plivo/nagarsevak-select?phone=" + phone + "&language=" + lang +
 		"&pincode=" + pincode + "&ward=" + ward + "&ids=" + strings.Join(ids, ",")
 
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
-		plivo.Speak(strings.Join(ttsParts, ". ")+".", lang),
+		plivo.Speak("Multiple corporators found. "+strings.Join(ttsParts, ". ")+".", lang),
 		plivo.GetDigits(action, 1, 10),
 	))
 }
@@ -391,19 +392,15 @@ func (h *PlivoHandler) returnRegisteredConfirmation(c *gin.Context, lang, nsName
 	if nsName == "" {
 		nsName = "your nagarsevak"
 	}
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "goodbye.mp3")
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Speak("You are now registered. Your nagarsevak is "+nsName+".", lang),
-		plivo.Wait(1),
-		plivo.Play(audio),
+		plivo.Speak("You are now registered. Your nagarsevak is "+nsName+". Thank you.", lang),
 		plivo.Hangup(),
 	))
 }
 
 func (h *PlivoHandler) returnWhatsAppPrompt(c *gin.Context, lang string) {
-	audio := plivo.AudioURL(h.audioBaseURL, lang, "whatsapp.mp3")
 	c.String(http.StatusOK, plivo.Response(
-		plivo.Play(audio),
+		plivo.Speak("We could not find your information. Please contact us on WhatsApp for assistance.", lang),
 		plivo.Hangup(),
 	))
 }

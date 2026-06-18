@@ -27,7 +27,7 @@ func (r *PoliticalUserRepository) FindMatchingWards(
 ) ([]models.WardMatch, error) {
 
 	query := `
-	SELECT DISTINCT
+	SELECT DISTINCT ON (ward)
 		ward,
 		id,
 		full_name

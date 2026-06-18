@@ -1,0 +1,15 @@
+[Unit]
+Description=Atl Janseva IVR (Plivo)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/ivr-atljanseva
+ExecStart=/opt/ivr-atljanseva/ivr-atljanseva
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/ivr-atljanseva/.env
+
+[Install]
+WantedBy=multi-user.target
