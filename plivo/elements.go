@@ -3,6 +3,7 @@ package plivo
 import (
 	"fmt"
 	"html"
+	"net/url"
 	"strings"
 )
 
@@ -43,7 +44,21 @@ func Redirect(url string) string {
 }
 
 func Dial(number string) string {
-	return fmt.Sprintf(`<Dial>%s</Dial>`, escape(number))
+	return fmt.Sprintf(`<Dial callerId="%s">%s</Dial>`, escape(number), escape(number))
+}
+
+func Record(action string, maxSeconds int, finishOnKey string) string {
+	return fmt.Sprintf(
+		`<Record action="%s" method="POST" maxLength="%d" finishOnKey="%s" />`,
+		escape(action), maxSeconds, escape(finishOnKey),
+	)
+}
+
+func RecordWithBeep(action string, maxSeconds int, finishOnKey string) string {
+	return fmt.Sprintf(
+		`<Record action="%s" method="POST" maxLength="%d" finishOnKey="%s" playBeep="true" />`,
+		escape(action), maxSeconds, escape(finishOnKey),
+	)
 }
 
 func Wait(seconds int) string {
@@ -51,7 +66,8 @@ func Wait(seconds int) string {
 }
 
 func AudioURL(baseURL, lang, file string) string {
-	return baseURL + "/" + langCodeShort(lang) + "/" + file
+	encoded := url.PathEscape(file)
+	return strings.TrimRight(baseURL, "/") + "/" + langCodeShort(lang) + "/" + encoded
 }
 
 func languageCode(lang string) string {
